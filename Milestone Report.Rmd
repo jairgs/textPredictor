@@ -1,0 +1,93 @@
+---
+title: "Milestone Report"
+author: Jair Garza
+output: 
+    html_notebook:
+        theme: spacelab
+        code_folding: hide
+        
+---
+##Introduction
+We are living in the era of smartphones and digital communications have changed the way we communicate with our peers. We spend increasing amounts of time typing on our electronics with our friends, job colleagues and in social media in general. Depending on the size of the dispositive, it can be quite challenging to accurately type what we want, thus potentially wasting a lot of time. 
+
+Fortunately, machine learning and statistical data-based methods can be used to make our lives easier; in fact, there are a lot of text predictors already out there implemented within keyboard apps. 
+
+In this project, we are building our own text prediction algorithm as a prototype for possible later implementations to smartphones and other personal dispositives. They key aspects we are focusing on for this project are:
+
+- Size on memory.
+- Execution time.
+- Performance.
+- Presentation.
+
+####Size on memory.
+Random Access Memory (RAM) is expensive and therefore limited in electronics. We need our program to use little system RAM so it can run smoothly simultaneously with other important aplications. Also, by lowering the memory requirements in the system, we make our potential user base size bigger and the app to start faster since less memory has to be allocated and filled with information. 
+
+####Execution time. 
+It is utterly important that the prediction time is as fast as the average typing speed since we need to predict the words as people are typing, not after they have completed the idea. 
+
+####Performance.
+We need the program to be relevant and make very accurate predictions of the next word in order to be useful, otherwise poeple won't use it. 
+
+####Presentation.
+They way the prediction is presented and displayed on the screen can be very important for the program appeal and relevance. 
+
+
+##Data and Corpora
+In Natural Language Processing (NLP), the area that studies the interaction between computers and the way people uses language, it is commonly named *corpora* to the compilation of text documents used to train the prediction algorithm or any other insight drawn from the data to understand language. 
+
+In our application, we are using a corpora of three text compilations coming from tweets (http://twitter.com), blog entries and news articles from different sources, all of them from US english speakers. The corpora used comes from the *Heliohost Corpora* originally from http://www.corpora.heliohost.org and can be downloaded [here](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip).
+
+The original zipped file size is 548 MB, although the file contains corpus in two additional languages which we did not use. Each corpus has different lengths as we could expect; for example, twitter has 140 characters limit and we expect blogs entries need bigger sizes to convey their ideas. The average size per line for the twitter, blogs and news corpus, respectively are shown bellow.
+```{r}
+mean(nchar(twitter))
+mean(nchar(blogs))
+mean(nchar(news))
+```
+The total number of entries for each corpus is showed bellow.
+```{r}
+length(twitter)
+length(blogs)
+length(news)
+```
+As we show in the next section, the size of this corpora makes the computation times unbereably high for the porpuses of this prototype and we need to work with a subset of this corpora.
+
+##Exploratory Analysis
+The way we are going to model the data in order to make a prediction is with the basic N-gram model. This representation of the structure of the data has the advantage of being very easy to interpret, has low computation times compared with other models, can be very accurate depending on several factors and assumptions that we are gonna cover in the next sections, has good scalability in the sense that we can relax assumptions and make it more complex if necessary and also some versions the N-gram model are probabilistic so we can make inference about the population, even for unseen cases in the training set.
+
+An $N-gram$ is a decomposition of a corpora of each combination of $N$ consecutive words making a phrase. In it's basic form, we can take the an $N-1$ gram and predict the last word based on the probability dependent on the original $N-gram$. The mathematical representation of the model is presented in the next sections. 
+
+Tokenization is the process of spliting the corpora in tokens that can be phrases, words, characters and whatnot. After the tokenization is made, we can compute our $N-grams$ and corresponding frequencies. We found the package *ngram*<sup>[1](#footnote1)</sup> to be relatively fast in creating the tokenization and associated ngrams since the relevant code is low level written in C. However, the conversion of the results into R data frames is still very time consuming and we needed to use a sample of the corpora to make our algorithm. In fact, we sampled each corpus separately to keep representativity accross each type of corpus randomly sampling 30% of the lines. Here is an example of the sampling process. 
+```{r}
+set.seed(147)
+twitter.intrain <- as.logical(rbinom(n = length(twitter), size = 1, prob = .3))
+twitter.train <- twitter[twitter.intrain]
+twitter.test <- twitter[-twitter.intrain]
+```
+The computational time to compute the ngram and frequency tables was slightly below one hour for the 1-grams and 2-grams and more than one hour for the 3-grams and 4-grams each. We decided that for the purposes of this prototype this 4 N-grams would do just fine to model the structure of the data and make good predictions.
+
+One important aspect of the corpora is that it contains profanity words in there and we decided that the *Google Ngram Project* profanity list (you can find a version of that list at https://gist.github.com/jamiew/1112488) is more than appropiate for our purposes; although, in the end we decided not to filter for profanities in the prototype since there is no valid reason to do so.
+
+Recall that one of our main goals for this project is to keep the memory size as small as possible. We found that predicting from the full set of ngrams and frequencies would be very inefficient since the size is unbearable for smartphones and also inefficient since N-grams with very low frequencies account for a big part of the tables. In the next figure we plot the 2gram table frequency distribution.
+```{r}
+barplot(head(count[order(count, decreasing = T)],100), main="2-gram Frequency Distribution")
+```
+From the previous plot we learned that we can save a lot of space in memory if we prune each N-gram without losing too much information since the size in memory is related to the number of N-grams but precision is related to the relative frequency of the N-grams.
+
+In fact, the guys at *Google Ngram Project* decided to prune the distribution for N-grams with frequency $k$ lower than 40.<sup>[2](#footnote2)</sup> We can't use the $k=40$ parameter used by Google beacause this number is determined by:
+
+1. The size of the corpora
+2. The cumulative frequency they are willing to retain.
+
+We decided to go for a $k=5$ for the 2-gram and 3-gram cases and $k=1$ for the 4-gram to keep a cumulative frequency of around 60% of the N-grams; we kept the complete 1-gram table since it doesn't take a lot of memory.
+
+##Next steps
+The prototype is going to be implemented on the shiny apps server from Rstudio and is going to consist of a text imput section and a prediction box. We are predicting the top 5 words in terms of likelihood and there is going to be a clear indication of which one is more likely. To handle unseen cases on the training set we are using a non probabilistic backoff model without interpolation and we can experiment later on with interpolation models. We are going to start in the 4gram model and backoff to the 3gram when the phrase is unseen and so on until the 1gram. We are going to use the 1gram to complete the word you are typing with the most likely word.
+
+You can access a beta version of the prototype at https://jairgs.shinyapps.io/text_predictor/
+
+##References
+<a name="footnote1">1</a>: Schmidt D and Heckendorf C (2017). “ngram: Fast n-Gram Tokenization.” R package version 3.0.2, https://cran.r-project.org/package=ngram and Schmidt D and Heckendorf C (2017). _Guide to the ngram Package: Fast n-gram Tokenization_. R Vignette, https://cran.r-project.org/package=ngram.
+
+<a name="footnote2">2</a>: Thorsten Brants, Ashok C.Popat, Peng Xu, Franz J. Och and Jeffrey Dean. "Large Language Models in Machine Translation.". http://www.aclweb.org/anthology/D07-1090.pdf.
+
+3: Daniel Jurafsky and James H. Martin. Speech and Language Processing. Draft of September 1, 2014. Chapter 4. https://lagunita.stanford.edu/c4x/Engineering/CS-224N/asset/slp4.pdf
